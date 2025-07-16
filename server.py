@@ -44,29 +44,45 @@ class ApplicationCreate(BaseModel):
 async def root():
     return {"message": "Money Mornings API - Ready!"}
 
-@app.post("/api/applications/submit")
-async def submit_application(app_data: ApplicationCreate):
-    application = {
-        "id": str(uuid.uuid4()),
-        "first_name": app_data.first_name,
-        "last_name": app_data.last_name,
-        "email": app_data.email,
-        "phone": app_data.phone,
-        "business_name": app_data.business_name,
-        "service_interest": app_data.service_interest,
-        "funding_amount": app_data.funding_amount,
-        "time_in_business": app_data.time_in_business,
-        "submission_date": datetime.utcnow(),
-        "status": "pending"
-    }
-    
-    result = await db.applications.insert_one(application)
-    return {"message": "Application submitted successfully", "id": application["id"]}
-
 @app.get("/api/applications")
 async def get_applications():
-    applications = await db.applications.find().to_list(100)
-    return applications
+    try:
+        applications = await db.applications.find().to_list(100)
+        
+        # Convert ObjectId to string for JSON serialization
+        for app in applications:
+            if '_id' in app:
+                app['_id'] = str(app['_id'])
+        
+        return applications
+        
+    except Exception as e:
+        print(f"Error retrieving applications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/applications/submit")
+async def submit_application(app_data: ApplicationCreate):
+    try:
+        application = {
+            "id": str(uuid.uuid4()),
+            "first_name": app_data.first_name,
+            "last_name": app_data.last_name,
+            "email": app_data.email,
+            "phone": app_data.phone,
+            "business_name": app_data.business_name,
+            "service_interest": app_data.service_interest,
+            "funding_amount": app_data.funding_amount,
+            "time_in_business": app_data.time_in_business,
+            "submission_date": datetime.utcnow(),
+            "status": "pending"
+        }
+        
+        result = await db.applications.insert_one(application)
+        return {"message": "Application submitted successfully", "id": application["id"]}
+        
+    except Exception as e:
+        print(f"Error submitting application: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(username: str = Depends(verify_admin)):
@@ -110,6 +126,7 @@ async def admin_dashboard(username: str = Depends(verify_admin)):
                 document.getElementById('applications').innerHTML = html;
             } catch (error) {
                 console.error('Error:', error);
+                document.getElementById('applications').innerHTML = '<p class="text-red-500">Error loading applications</p>';
             }
         }
         
