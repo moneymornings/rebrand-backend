@@ -19,15 +19,9 @@ logger = logging.getLogger(__name__)
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 db_name = os.environ.get('DB_NAME', 'money_mornings')
 
-# MongoDB connection with error handling
-try:
-    client = AsyncIOMotorClient(mongo_url)
-    db = client[db_name]
-    logger.info(f"Connected to MongoDB: {db_name}")
-except Exception as e:
-    logger.error(f"MongoDB connection error: {e}")
-    client = None
-    db = None
+# MongoDB connection
+client = AsyncIOMotorClient(mongo_url)
+db = client[db_name]
 
 app = FastAPI(title="Money Mornings API")
 security = HTTPBasic()
@@ -61,9 +55,6 @@ async def root():
 @app.post("/api/applications/submit")
 async def submit_application(app_data: ApplicationCreate):
     try:
-        if not db:
-            raise HTTPException(status_code=500, detail="Database not connected")
-            
         application = {
             "id": str(uuid.uuid4()),
             "first_name": app_data.first_name,
@@ -89,9 +80,6 @@ async def submit_application(app_data: ApplicationCreate):
 @app.get("/api/applications")
 async def get_applications():
     try:
-        if not db:
-            raise HTTPException(status_code=500, detail="Database not connected")
-            
         applications = await db.applications.find().to_list(100)
         logger.info(f"Retrieved {len(applications)} applications")
         return applications
@@ -158,6 +146,9 @@ async def admin_dashboard(username: str = Depends(verify_admin)):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
     allow_methods=["*"],
     allow_headers=["*"],
 )
