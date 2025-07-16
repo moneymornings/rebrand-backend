@@ -9,11 +9,25 @@ import os
 import uuid
 from datetime import datetime
 import secrets
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Environment variables
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'money_mornings')]
+db_name = os.environ.get('DB_NAME', 'money_mornings')
+
+# MongoDB connection with error handling
+try:
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
+    logger.info(f"Connected to MongoDB: {db_name}")
+except Exception as e:
+    logger.error(f"MongoDB connection error: {e}")
+    client = None
+    db = None
 
 app = FastAPI(title="Money Mornings API")
 security = HTTPBasic()
@@ -39,19 +53,6 @@ class ApplicationCreate(BaseModel):
     funding_amount: Optional[str] = None
     time_in_business: Optional[str] = None
 
-class Application(BaseModel):
-    id: str
-    first_name: str
-    last_name: str
-    email: str
-    phone: str
-    business_name: Optional[str] = None
-    service_interest: str
-    funding_amount: Optional[str] = None
-    time_in_business: Optional[str] = None
-    submission_date: datetime
-    status: str = "pending"
-
 # Routes
 @app.get("/api/")
 async def root():
@@ -59,27 +60,45 @@ async def root():
 
 @app.post("/api/applications/submit")
 async def submit_application(app_data: ApplicationCreate):
-    application = {
-        "id": str(uuid.uuid4()),
-        "first_name": app_data.first_name,
-        "last_name": app_data.last_name,
-        "email": app_data.email,
-        "phone": app_data.phone,
-        "business_name": app_data.business_name,
-        "service_interest": app_data.service_interest,
-        "funding_amount": app_data.funding_amount,
-        "time_in_business": app_data.time_in_business,
-        "submission_date": datetime.utcnow(),
-        "status": "pending"
-    }
-    
-    result = await db.applications.insert_one(application)
-    return {"message": "Application submitted successfully", "id": application["id"]}
+    try:
+        if not db:
+            raise HTTPException(status_code=500, detail="Database not connected")
+            
+        application = {
+            "id": str(uuid.uuid4()),
+            "first_name": app_data.first_name,
+            "last_name": app_data.last_name,
+            "email": app_data.email,
+            "phone": app_data.phone,
+            "business_name": app_data.business_name,
+            "service_interest": app_data.service_interest,
+            "funding_amount": app_data.funding_amount,
+            "time_in_business": app_data.time_in_business,
+            "submission_date": datetime.utcnow(),
+            "status": "pending"
+        }
+        
+        result = await db.applications.insert_one(application)
+        logger.info(f"Application submitted: {application['email']}")
+        return {"message": "Application submitted successfully", "id": application["id"]}
+        
+    except Exception as e:
+        logger.error(f"Error submitting application: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/applications")
 async def get_applications():
-    applications = await db.applications.find().to_list(100)
-    return applications
+    try:
+        if not db:
+            raise HTTPException(status_code=500, detail="Database not connected")
+            
+        applications = await db.applications.find().to_list(100)
+        logger.info(f"Retrieved {len(applications)} applications")
+        return applications
+        
+    except Exception as e:
+        logger.error(f"Error retrieving applications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(username: str = Depends(verify_admin)):
@@ -124,6 +143,7 @@ async def admin_dashboard(username: str = Depends(verify_admin)):
                     document.getElementById('applications').innerHTML = html;
                 } catch (error) {
                     console.error('Error:', error);
+                    document.getElementById('applications').innerHTML = '<p class="text-red-500">Error loading applications</p>';
                 }
             }
             
