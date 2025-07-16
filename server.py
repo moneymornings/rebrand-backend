@@ -26,7 +26,6 @@ db = client[db_name]
 app = FastAPI(title="Money Mornings API")
 security = HTTPBasic()
 
-# Authentication
 def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
     admin_user = os.environ.get('ADMIN_USERNAME', 'admin')
     admin_pass = os.environ.get('ADMIN_PASSWORD', 'MoneyMornings2025!')
@@ -36,7 +35,6 @@ def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return credentials.username
 
-# Models
 class ApplicationCreate(BaseModel):
     first_name: str
     last_name: str
@@ -47,7 +45,6 @@ class ApplicationCreate(BaseModel):
     funding_amount: Optional[str] = None
     time_in_business: Optional[str] = None
 
-# Routes
 @app.get("/api/")
 async def root():
     return {"message": "Money Mornings API - Ready!"}
@@ -142,7 +139,6 @@ async def admin_dashboard(username: str = Depends(verify_admin)):
     </html>
     """
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
